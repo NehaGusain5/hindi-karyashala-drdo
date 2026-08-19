@@ -1,197 +1,291 @@
 <?php
-
 session_start();
 
-$db_connection = mysqli_connect(
-    "localhost",
-    "root",
-    "",
-    "karyashala"
-);
-
-if (!$db_connection) {
-    die("Database connection failed");
-}
+require_once "config/db.php";
 
 $error = "";
 
-if (isset($_POST['login'])) {
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
-    $ic_number = $_POST['ic_number'];
-    $password = $_POST['password'];
+    $icno = $_POST["icno"];
+    $password = $_POST["password"];
 
-    $result = mysqli_query(
-        $db_connection,
-        "SELECT employees.*, roles.password, roles.role
-         FROM employees
-         INNER JOIN roles
-         ON employees.ic_number = roles.ic_number
-         WHERE employees.ic_number='$ic_number'
-         AND roles.password='$password'"
-    );
+    $sql = "SELECT ICNO, ENAME, PASSWORD FROM employees WHERE ICNO = ?";
 
-    if (mysqli_num_rows($result) == 1) {
+    $stmt = mysqli_prepare($conn, $sql);
+    mysqli_stmt_bind_param($stmt, "i", $icno);
+    mysqli_stmt_execute($stmt);
 
-        $row = mysqli_fetch_assoc($result);
+    $result = mysqli_stmt_get_result($stmt);
 
-        $_SESSION['ic_number'] = $row['ic_number'];
-        $_SESSION['name'] = $row['name'];
-        $_SESSION['email'] = $row['email'];
-        $_SESSION['role'] = $row['role'];
+    if (mysqli_num_rows($result) == 0) {
 
-        setcookie(
-            "ic_number",
-            $row['ic_number'],
-            time() + (10 * 365 * 24 * 60 * 60),
-            "/"
-        );
-
-
-        if ($row['role'] == "Admin") {
-
-            header("Location: admin/dashboard.php");
-            exit();
-
-        }
-
-        if ($row['role'] == "Karyashala Admin") {
-
-            header("Location: karyashala/dashboard.php");
-            exit();
-
-        }
-
-        if ($row['role'] == "Employee") {
-
-            header("Location: employee/dashboard.php");
-            exit();
-
-        }
+        $error = "Incorrect ICNO";
 
     } else {
 
-        $error = "Invalid IC Number or Password";
+        $employee = mysqli_fetch_assoc($result);
 
+        if ($password != $employee["PASSWORD"]) {
+
+            $error = "Invalid password";
+
+        } else {
+
+            $role_sql = "SELECT ROLE FROM roles WHERE ICNO = ?";
+
+            $role_stmt = mysqli_prepare($conn, $role_sql);
+            mysqli_stmt_bind_param($role_stmt, "i", $icno);
+            mysqli_stmt_execute($role_stmt);
+
+            $role_result = mysqli_stmt_get_result($role_stmt);
+
+            if (mysqli_num_rows($role_result) > 0) {
+
+                $role_data = mysqli_fetch_assoc($role_result);
+
+                $_SESSION["ICNO"] = $employee["ICNO"];
+                $_SESSION["ENAME"] = $employee["ENAME"];
+                $_SESSION["ROLE"] = $role_data["ROLE"];
+
+                if ($role_data["ROLE"] == "admin") {
+
+                    header("Location: admin/dashboard.php");
+                    exit();
+
+                } elseif ($role_data["ROLE"] == "karyashala_admin") {
+
+                    header("Location: karyashala_dashboard.php");
+                    exit();
+
+                } else {
+
+                    $error = "Invalid role";
+                }
+
+            } else {
+
+                $error = "Role not assigned";
+            }
+        }
     }
 }
-
-mysqli_close($db_connection);
-
 ?>
 
 <!DOCTYPE html>
-
 <html lang="en">
 
 <head>
 
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    <title>DRDO Karyashala Login</title>
 
-    <title>
-        DRDO Hindi Karyashala Portal
-    </title>
+    <style>
 
-    <link
-        rel="stylesheet"
-        href="css/login.css"
-    >
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background-color: #dff3ff;
+            min-height: 100vh;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-box {
+
+            width: 400px;
+            background-color: white;
+
+            padding: 30px;
+
+            border-radius: 12px;
+
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+
+            text-align: center;
+        }
+
+        .logo {
+
+            width: 150px;
+            height: 150px;
+
+            object-fit: contain;
+
+            margin-bottom: 15px;
+        }
+
+        .drdo-full-form {
+
+            font-size: 14px;
+            font-weight: bold;
+
+            color: #333;
+
+            line-height: 1.5;
+
+            margin-bottom: 20px;
+        }
+
+        .login-box h2 {
+
+            margin-bottom: 20px;
+
+            color: #003b6f;
+        }
+
+        .input-group {
+
+            text-align: left;
+
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+
+            display: block;
+
+            margin-bottom: 6px;
+
+            font-weight: bold;
+
+            color: #333;
+        }
+
+        .input-group input {
+
+            width: 100%;
+
+            padding: 11px;
+
+            border: 1px solid #aaa;
+
+            border-radius: 6px;
+
+            font-size: 16px;
+        }
+
+        .input-group input:focus {
+
+            outline: none;
+
+            border-color: #0066a1;
+        }
+
+        .error {
+
+            color: red;
+
+            margin-bottom: 15px;
+
+            font-size: 14px;
+
+            font-weight: bold;
+        }
+
+        .login-btn {
+
+            width: 100%;
+
+            padding: 12px;
+
+            border: none;
+
+            border-radius: 6px;
+
+            background-color: #0066a1;
+
+            color: white;
+
+            font-size: 16px;
+
+            font-weight: bold;
+
+            cursor: pointer;
+        }
+
+        .login-btn:hover {
+
+            background-color: #004f7d;
+        }
+
+    </style>
 
 </head>
 
 <body>
 
-<div class="login-page">
-
-    <div class="logo-section">
+    <div class="login-box">
 
         <img
             src="images/drdo-logo.jpg"
             alt="DRDO Logo"
-            class="drdo-logo"
+            class="logo"
         >
 
-        <h1>
-            Hindi Karyashala Portal
-        </h1>
+        <div class="drdo-full-form">
 
-        <p>
             Defence Research and Development Organisation
-        </p>
+            <br>
 
-    </div>
+            Ministry of Defence, Government of India
 
+        </div>
 
-    <div class="login-box">
+        <h2>Login</h2>
 
+        <?php if ($error != ""): ?>
 
-        <h2>
-            Login
-        </h2>
-
-        <p class="login-subtitle">
-            Enter your credentials to continue
-        </p>
-
-
-        <!-- ERROR -->
-
-        <?php
-
-        if ($error != "") {
-
-            echo "
-            <div class='error'>
-                $error
+            <div class="error">
+                <?php echo htmlspecialchars($error); ?>
             </div>
-            ";
 
-        }
+        <?php endif; ?>
 
-        ?>
-
-
-        <form method="POST">
+        <form method="POST" action="">
 
             <div class="input-group">
 
-                <label for="ic_number">
-                    IC Number
-                </label>
+                <label for="icno">ICNO</label>
 
                 <input
-                    type="text"
-                    id="ic_number"
-                    name="ic_number"
-                    placeholder="Enter your IC Number"
+                    type="number"
+                    id="icno"
+                    name="icno"
+                    min="1001"
+                    step="1"
                     required
+                    placeholder="Enter ICNO"
                 >
 
             </div>
 
             <div class="input-group">
 
-                <label for="password">
-                    Password
-                </label>
+                <label for="password">Password</label>
 
                 <input
                     type="password"
                     id="password"
                     name="password"
-                    placeholder="Enter your Password"
                     required
+                    placeholder="Enter password"
                 >
 
             </div>
 
             <button
                 type="submit"
-                name="login"
+                class="login-btn"
             >
                 Login
             </button>
@@ -199,21 +293,6 @@ mysqli_close($db_connection);
         </form>
 
     </div>
-
-    <div class="footer">
-
-        <p>
-            © 2026 Defence Research and Development Organisation
-        </p>
-
-        <p>
-            Hindi Karyashala Portal
-        </p>
-
-    </div>
-
-
-</div>
 
 </body>
 

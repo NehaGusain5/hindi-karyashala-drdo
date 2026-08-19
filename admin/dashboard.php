@@ -2,2210 +2,520 @@
 
 session_start();
 
-if (!isset($_SESSION['ic_number'])) {
+require_once "../config/db.php";
 
+if (!isset($_SESSION["ICNO"]) || !isset($_SESSION["ROLE"])) {
     header("Location: ../login.php");
     exit();
-
 }
 
-if ($_SESSION['role'] != "Admin") {
-
+if ($_SESSION["ROLE"] !== "admin") {
     header("Location: ../login.php");
     exit();
-
 }
 
-$db_connection = mysqli_connect(
-    "localhost",
-    "root",
-    "",
-    "karyashala"
-);
-
-if (!$db_connection) {
-
-    die("Database connection failed");
-
-}
-
+$designations = [
+    "Scientist B",
+    "Scientist C",
+    "Scientist D",
+    "Scientist E",
+    "Scientist F",
+    "Scientist G",
+    "Scientist H",
+    "TO A",
+    "TO B",
+    "TO C",
+    "TO D",
+    "HRD",
+    "Director",
+    "Employee"
+];
 
 $message = "";
+$message_type = "";
 
-if (isset($_POST['add_employee'])) {
+if (isset($_POST["add_employee"])) {
 
-    $ic_number = $_POST['ic_number'];
-    $name = $_POST['name'];
-    $phone = $_POST['phone'];
-    $designation = $_POST['designation'];
-    $email = $_POST['email'];
+    $ename = trim($_POST["ename"]);
+    $edesig = trim($_POST["edesig"]);
+    $egroup = trim($_POST["egroup"]);
+    $password = trim($_POST["password"]);
 
-    $password = $_POST['password'];
-    $role = $_POST['role'];
+    if ($ename == "" || $edesig == "" || $egroup == "" || $password == "") {
 
-    $query = "
-        INSERT INTO employees
-        (
-            ic_number,
-            name,
-            phone,
-            designation,
-            email
-        )
-        VALUES
-        (
-            '$ic_number',
-            '$name',
-            '$phone',
-            '$designation',
-            '$email'
-        )
-    ";
+        $message = "Please fill all required fields.";
+        $message_type = "error";
 
+    } elseif (!in_array($edesig, $designations)) {
 
-    if (mysqli_query($db_connection, $query)) {
+        $message = "Invalid designation selected.";
+        $message_type = "error";
 
-        $role_query = "
-            INSERT INTO roles
-            (
-                ic_number,
-                password,
-                role
-            )
-            VALUES
-            (
-                '$ic_number',
-                '$password',
-                '$role'
-            )
-        ";
+    } else {
 
+        $sql = "INSERT INTO employees
+                (ENAME, EDESIG, EGROUP, PASSWORD)
+                VALUES (?, ?, ?, ?)";
 
-        if (mysqli_query($db_connection, $role_query)) {
+        $stmt = mysqli_prepare($conn, $sql);
 
-            $message =
-                "Employee added successfully.";
+        mysqli_stmt_bind_param(
+            $stmt,
+            "ssss",
+            $ename,
+            $edesig,
+            $egroup,
+            $password
+        );
+
+        if (mysqli_stmt_execute($stmt)) {
+
+            $new_icno = mysqli_insert_id($conn);
+
+            $role = "employee";
+
+            $role_sql = "INSERT INTO roles (ICNO, ENAME, ROLE)
+                         VALUES (?, ?, ?)";
+
+            $role_stmt = mysqli_prepare($conn, $role_sql);
+
+            mysqli_stmt_bind_param(
+                $role_stmt,
+                "iss",
+                $new_icno,
+                $ename,
+                $role
+            );
+
+            mysqli_stmt_execute($role_stmt);
+
+            $message = "Employee added successfully. ICNO: " . $new_icno;
+            $message_type = "success";
 
         } else {
 
-            $message =
-                "Employee added but login information could not be created.";
-
+            $message = "Unable to add employee.";
+            $message_type = "error";
         }
+    }
+}
 
+if (isset($_POST["edit_employee"])) {
+
+    $icno = intval($_POST["icno"]);
+    $ename = trim($_POST["ename"]);
+    $edesig = trim($_POST["edesig"]);
+    $egroup = trim($_POST["egroup"]);
+
+    if ($ename == "" || $edesig == "" || $egroup == "") {
+
+        $message = "Please fill all required fields.";
+        $message_type = "error";
+
+    } elseif (!in_array($edesig, $designations)) {
+
+        $message = "Invalid designation selected.";
+        $message_type = "error";
 
     } else {
 
-        $message =
-            "Error adding employee: "
-            . mysqli_error($db_connection);
-
-    }
-
-}
-
-if (isset($_POST['update_employee'])) {
-
-    $ic_number = $_POST['ic_number'];
-    $name = $_POST['name'];
-    $phone = $_POST['phone'];
-    $designation = $_POST['designation'];
-    $email = $_POST['email'];
-
-
-    $query = "
-        UPDATE employees
-
-        SET
-            name='$name',
-            phone='$phone',
-            designation='$designation',
-            email='$email'
-
-        WHERE ic_number='$ic_number'
-    ";
-
-
-    if (mysqli_query($db_connection, $query)) {
-
-        $message =
-            "Employee information updated successfully.";
-
-    } else {
-
-        $message =
-            "Error updating employee.";
-
-    }
-
-}
-
-
-if (isset($_POST['update_workshop'])) {
-
-    $workshop_id =
-        $_POST['workshop_id'];
-
-    $attendance_date =
-        $_POST['attendance_date'];
-
-    $attendance_status =
-        $_POST['attendance_status'];
-
-    $remarks =
-        $_POST['remarks'];
-
-    $updated_by =
-        $_SESSION['ic_number'];
-
-
-    $query = "
-        UPDATE workshops
-
-        SET
-            attendance_date='$attendance_date',
-            attendance_status='$attendance_status',
-            remarks='$remarks',
-            updated_by='$updated_by',
-            updated_at=CURRENT_TIMESTAMP
-
-        WHERE workshop_id='$workshop_id'
-    ";
-
-
-    if (mysqli_query($db_connection, $query)) {
-
-        $message =
-            "Workshop attendance updated successfully.";
-
-    } else {
-
-        $message =
-            "Error updating workshop.";
-
-    }
-
-}
-
-$employees = mysqli_query(
-
-    $db_connection,
-
-    "SELECT
-        employees.*,
-        roles.role
-
-     FROM employees
-
-     LEFT JOIN roles
-
-     ON employees.ic_number =
-        roles.ic_number
-
-     ORDER BY
-        employees.ic_number ASC"
-
-);
-
-$result = mysqli_query(
-
-    $db_connection,
-
-    "SELECT COUNT(*) AS total
-     FROM employees"
-
-);
-
-$row = mysqli_fetch_assoc($result);
-
-$total_employees = $row['total'];
-
-$result = mysqli_query(
-
-    $db_connection,
-
-    "SELECT COUNT(*) AS total
-     FROM workshops"
-
-);
-
-$row = mysqli_fetch_assoc($result);
-
-$total_workshops = $row['total'];
-
-$result = mysqli_query(
-
-    $db_connection,
-
-    "SELECT COUNT(*) AS total
-     FROM workshops
-
-     WHERE attendance_status='Attended'"
-
-);
-
-$row = mysqli_fetch_assoc($result);
-
-$total_attended = $row['total'];
-
-$result = mysqli_query(
-
-    $db_connection,
-
-    "SELECT COUNT(*) AS total
-     FROM workshops
-
-     WHERE attendance_status='Pending'"
-
-);
-
-$row = mysqli_fetch_assoc($result);
-
-$total_pending = $row['total'];
-
-$workshop_year_filter = "";
-
-$selected_workshop_year = "";
-
-
-if (
-    isset($_GET['workshop_year']) &&
-    $_GET['workshop_year'] != ""
-) {
-
-    $selected_workshop_year =
-        $_GET['workshop_year'];
-
-    $workshop_year_filter =
-
-        "WHERE workshops.workshop_year =
-        '$selected_workshop_year'";
-
-}
-
-$workshops = mysqli_query(
-
-    $db_connection,
-
-    "SELECT
-        workshops.*,
-        employees.name,
-        employees.designation
-
-     FROM workshops
-
-     INNER JOIN employees
-
-     ON workshops.employee_ic =
-        employees.ic_number
-
-     $workshop_year_filter
-
-     ORDER BY
-        employees.ic_number ASC,
-        workshops.workshop_year ASC,
-        workshops.attendance_date ASC"
-
-);
-
-$show_report = false;
-
-$from_year = "";
-
-$to_year = "";
-
-$report_rows = [];
-
-$satisfied = 0;
-
-$not_satisfied = 0;
-
-$report_error = "";
-
-if (isset($_GET['show_report'])) {
-
-    $from_year =
-        $_GET['from_year'];
-
-    $to_year =
-        $_GET['to_year'];
-
-
-    if (
-        $from_year == "" ||
-        $to_year == ""
-    ) {
-
-        $report_error =
-            "Please select both years.";
-
-    }
-
-    elseif (
-        ($to_year - $from_year) != 1
-    ) {
-
-        $report_error =
-            "Please select exactly two consecutive years.";
-
-    }
-
-    else {
-
-        $show_report = true;
-
-        $report_query = "
-
-            SELECT
-
-                employees.ic_number,
-
-                employees.name,
-
-                employees.designation,
-
-                COUNT(
-
-                    CASE
-
-                        WHEN workshops.attendance_status =
-                        'Attended'
-
-                        THEN 1
-
-                    END
-
-                ) AS attended_count,
-
-
-                COUNT(
-                    workshops.workshop_id
-                ) AS total_records
-
-
-            FROM employees
-
-
-            LEFT JOIN workshops
-
-            ON employees.ic_number =
-               workshops.employee_ic
-
-
-            AND workshops.workshop_year
-                BETWEEN '$from_year'
-                AND '$to_year'
-
-
-            GROUP BY
-
-                employees.ic_number,
-
-                employees.name,
-
-                employees.designation
-
-
-            ORDER BY
-                employees.ic_number ASC
-
-        ";
-
-
-        $report_result = mysqli_query(
-
-            $db_connection,
-
-            $report_query
-
+        $sql = "UPDATE employees
+                SET ENAME = ?, EDESIG = ?, EGROUP = ?
+                WHERE ICNO = ?";
+
+        $stmt = mysqli_prepare($conn, $sql);
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "sssi",
+            $ename,
+            $edesig,
+            $egroup,
+            $icno
         );
 
+        if (mysqli_stmt_execute($stmt)) {
 
-        while (
-            $row =
-            mysqli_fetch_assoc($report_result)
-        ) {
+            $role_sql = "UPDATE roles
+                         SET ENAME = ?
+                         WHERE ICNO = ?";
 
-            $report_rows[] = $row;
+            $role_stmt = mysqli_prepare($conn, $role_sql);
 
+            mysqli_stmt_bind_param(
+                $role_stmt,
+                "si",
+                $ename,
+                $icno
+            );
 
-            if (
-                $row['attended_count'] >= 1
-            ) {
+            mysqli_stmt_execute($role_stmt);
 
-                $satisfied++;
+            $message = "Employee details updated successfully.";
+            $message_type = "success";
 
-            } else {
+        } else {
 
-                $not_satisfied++;
-
-            }
-
+            $message = "Unable to update employee.";
+            $message_type = "error";
         }
-
     }
-
 }
+
+if (isset($_POST["delete_employee"])) {
+
+    $icno = intval($_POST["delete_icno"]);
+
+    if ($icno == $_SESSION["ICNO"]) {
+
+        $message = "You cannot delete your own account.";
+        $message_type = "error";
+
+    } else {
+
+        $role_sql = "DELETE FROM roles WHERE ICNO = ?";
+
+        $role_stmt = mysqli_prepare($conn, $role_sql);
+
+        mysqli_stmt_bind_param(
+            $role_stmt,
+            "i",
+            $icno
+        );
+
+        mysqli_stmt_execute($role_stmt);
+
+        $sql = "DELETE FROM employees WHERE ICNO = ?";
+
+        $stmt = mysqli_prepare($conn, $sql);
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $icno
+        );
+
+        if (mysqli_stmt_execute($stmt)) {
+
+            $message = "Employee deleted successfully.";
+            $message_type = "success";
+
+        } else {
+
+            $message = "Unable to delete employee.";
+            $message_type = "error";
+        }
+    }
+}
+
+$sql = "SELECT ICNO, ENAME, EDESIG, EGROUP
+        FROM employees
+        ORDER BY ICNO ASC";
+
+$result = mysqli_query($conn, $sql);
 
 ?>
 
 <!DOCTYPE html>
-
 <html lang="en">
 
 <head>
 
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-<meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>
-    Admin Dashboard | Hindi Karyashala
-</title>
+    <title>Admin Dashboard - DRDO Hindi Karyashala</title>
 
-
-<link
-    rel="stylesheet"
-    href="../css/admin.css"
->
+    <link rel="stylesheet" href="../css/admin.css">
 
 </head>
 
-
 <body>
 
-<div class="sidebar">
+<div class="header">
 
-
-    <div class="sidebar-logo">
+    <div class="header-left">
 
         <img
             src="../images/drdo-logo.jpg"
-            alt="DRDO"
+            class="header-logo"
+            alt="DRDO Logo"
         >
 
-        <h2>
-            Hindi Karyashala
-        </h2>
-
-        <p>
-            Admin Portal
-        </p>
-
-    </div>
-
-
-    <div class="menu">
-
-        <a href="#dashboard">
-            Dashboard
-        </a>
-
-        <a href="#employees">
-            Employees
-        </a>
-
-        <a href="#workshops">
-            Workshops
-        </a>
-
-        <a href="#reports">
-            Reports
-        </a>
-
-    </div>
-
-
-    <div class="sidebar-bottom">
-
-        <a
-            href="../logout.php"
-            class="logout"
-        >
-            Logout
-        </a>
-
-    </div>
-
-
-</div>
-
-<div class="main-content">
-
-    <div class="topbar">
-
-        <div>
+        <div class="header-title">
 
             <h1>
-                Admin Dashboard
+                DRDO Hindi Karyashala Management
             </h1>
 
             <p>
-
-                Welcome,
-                <?php
-
-                echo isset($_SESSION['name'])
-                    ? $_SESSION['name']
-                    : 'Admin';
-
-                ?>
-
+                Defence Research and Development Organisation
             </p>
 
         </div>
 
     </div>
 
-    <?php
-
-    if ($message != "") {
-
-        echo "
-
-        <div class='success-message'>
-
-            $message
-
-        </div>
-
-        ";
-
-    }
-
-    ?>
-
-    <section
-        id="dashboard"
-        class="dashboard-section"
+    <a
+        href="../logout.php"
+        class="logout-btn"
     >
+        Logout
+    </a>
 
+</div>
 
-        <div class="stat-card">
+<div class="container">
 
-            <h3>
-                Total Employees
-            </h3>
+    <div class="welcome">
 
-            <strong>
-                <?php
-                echo $total_employees;
-                ?>
-            </strong>
+        <h2>
+            Welcome, <?php echo htmlspecialchars($_SESSION["ENAME"]); ?>!
+        </h2>
 
-        </div>
+        <p>
+            Admin Dashboard
+        </p>
 
+    </div>
 
-        <div class="stat-card">
+    <?php if ($message != ""): ?>
 
-            <h3>
-                Total Workshops
-            </h3>
+        <div class="message <?php echo $message_type; ?>">
 
-            <strong>
-                <?php
-                echo $total_workshops;
-                ?>
-            </strong>
+            <?php echo htmlspecialchars($message); ?>
 
         </div>
 
+    <?php endif; ?>
 
-        <div class="stat-card">
+    <div class="action-bar">
 
-            <h3>
-                Attended
-            </h3>
+        <h2>
+            Employee Management
+        </h2>
 
-            <strong>
-                <?php
-                echo $total_attended;
-                ?>
-            </strong>
-
-        </div>
-
-
-        <div class="stat-card">
-
-            <h3>
-                Pending
-            </h3>
-
-            <strong>
-                <?php
-                echo $total_pending;
-                ?>
-            </strong>
-
-        </div>
-
-
-    </section>
-
-    <section
-        id="employees"
-        class="content-section"
-    >
-
-
-        <div class="section-header">
-
-
-            <div>
-
-                <h2>
-                    Employee Management
-                </h2>
-
-                <p>
-                    View and manage all employees
-                </p>
-
-            </div>
-
-
-            <button
-                class="primary-button"
-                onclick="openAddModal()"
-            >
-
-                + Add Employee
-
-            </button>
-
-
-        </div>
-
-
-
-        <div class="table-container">
-
-
-            <table>
-
-
-                <thead>
-
-                <tr>
-
-                    <th>
-                        IC Number
-                    </th>
-
-                    <th>
-                        Name
-                    </th>
-
-                    <th>
-                        Phone
-                    </th>
-
-                    <th>
-                        Designation
-                    </th>
-
-                    <th>
-                        Email
-                    </th>
-
-                    <th>
-                        Role
-                    </th>
-
-                    <th>
-                        Action
-                    </th>
-
-                </tr>
-
-                </thead>
-
-
-                <tbody>
-
-
-                <?php
-
-                while (
-                    $employee =
-                    mysqli_fetch_assoc($employees)
-                ) {
-
-                ?>
-
-
-                <tr>
-
-
-                    <td>
-                        <?php
-                        echo $employee['ic_number'];
-                        ?>
-                    </td>
-
-
-                    <td>
-                        <?php
-                        echo htmlspecialchars(
-                            $employee['name']
-                        );
-                        ?>
-                    </td>
-
-
-                    <td>
-                        <?php
-                        echo $employee['phone'];
-                        ?>
-                    </td>
-
-
-                    <td>
-                        <?php
-                        echo htmlspecialchars(
-                            $employee['designation']
-                        );
-                        ?>
-                    </td>
-
-
-                    <td>
-                        <?php
-                        echo htmlspecialchars(
-                            $employee['email']
-                        );
-                        ?>
-                    </td>
-
-
-                    <td>
-
-                        <span class="role-badge">
-
-                            <?php
-
-                            echo $employee['role']
-                                ? $employee['role']
-                                : 'Employee';
-
-                            ?>
-
-                        </span>
-
-                    </td>
-
-
-                    <td>
-
-                        <button
-                            class="edit-button"
-
-                            onclick="openEditEmployeeModal(
-                                '<?php
-                                echo $employee['ic_number'];
-                                ?>',
-
-                                '<?php
-                                echo htmlspecialchars(
-                                    $employee['name'],
-                                    ENT_QUOTES
-                                );
-                                ?>',
-
-                                '<?php
-                                echo htmlspecialchars(
-                                    $employee['phone'],
-                                    ENT_QUOTES
-                                );
-                                ?>',
-
-                                '<?php
-                                echo htmlspecialchars(
-                                    $employee['designation'],
-                                    ENT_QUOTES
-                                );
-                                ?>',
-
-                                '<?php
-                                echo htmlspecialchars(
-                                    $employee['email'],
-                                    ENT_QUOTES
-                                );
-                                ?>'
-                            )"
-                        >
-
-                            Edit
-
-                        </button>
-
-                    </td>
-
-
-                </tr>
-
-
-                <?php
-
-                }
-
-                ?>
-
-
-                </tbody>
-
-
-            </table>
-
-
-        </div>
-
-
-    </section>
-
-    <section
-        id="workshops"
-        class="content-section"
-    >
-
-        <div class="section-header">
-
-
-            <div>
-
-                <h2>
-                    Workshop Management
-                </h2>
-
-                <p>
-                    Manage workshop attendance
-                </p>
-
-            </div>
-
-
-            <!-- YEAR FILTER -->
-
-            <form
-                method="GET"
-                action="#workshops"
-            >
-
-                <select
-                    name="workshop_year"
-                    class="year-select"
-                    onchange="this.form.submit()"
-                >
-
-
-                    <option value="">
-                        All Years
-                    </option>
-
-
-                    <?php
-
-                    for (
-                        $year = 2020;
-                        $year <= date("Y");
-                        $year++
-                    ) {
-
-                        $selected = "";
-
-                        if (
-                            $selected_workshop_year ==
-                            $year
-                        ) {
-
-                            $selected =
-                                "selected";
-
-                        }
-
-
-                        echo "
-
-                        <option
-                            value='$year'
-                            $selected
-                        >
-
-                            $year
-
-                        </option>
-
-                        ";
-
-                    }
-
-                    ?>
-
-
-                </select>
-
-
-            </form>
-
-
-        </div>
-
-
-
-        <div class="table-container">
-
-
-            <table>
-
-
-                <thead>
-
-                <tr>
-
-                    <th>
-                        IC Number
-                    </th>
-
-                    <th>
-                        Employee
-                    </th>
-
-                    <th>
-                        Designation
-                    </th>
-
-                    <th>
-                        Workshop
-                    </th>
-
-                    <th>
-                        Year
-                    </th>
-
-                    <th>
-                        Date
-                    </th>
-
-                    <th>
-                        Status
-                    </th>
-
-                    <th>
-                        Action
-                    </th>
-
-                </tr>
-
-                </thead>
-
-
-                <tbody>
-
-
-                <?php
-
-                if (
-                    mysqli_num_rows($workshops) > 0
-                ) {
-
-
-                    while (
-                        $workshop =
-                        mysqli_fetch_assoc($workshops)
-                    ) {
-
-                ?>
-
-
-                <tr>
-
-
-                    <td>
-
-                        <?php
-                        echo $workshop['employee_ic'];
-                        ?>
-
-                    </td>
-
-
-                    <td>
-
-                        <?php
-
-                        echo htmlspecialchars(
-                            $workshop['name']
-                        );
-
-                        ?>
-
-                    </td>
-
-
-                    <td>
-
-                        <?php
-
-                        echo htmlspecialchars(
-                            $workshop['designation']
-                        );
-
-                        ?>
-
-                    </td>
-
-
-                    <td>
-
-                        <?php
-
-                        echo htmlspecialchars(
-                            $workshop['workshop_name']
-                        );
-
-                        ?>
-
-                    </td>
-
-
-                    <td>
-
-                        <?php
-
-                        echo $workshop[
-                            'workshop_year'
-                        ];
-
-                        ?>
-
-                    </td>
-
-
-                    <td>
-
-                        <?php
-
-                        echo $workshop[
-                            'attendance_date'
-                        ];
-
-                        ?>
-
-                    </td>
-
-
-                    <td>
-
-
-                        <span
-                            class="status
-                            <?php
-
-                            echo strtolower(
-                                $workshop[
-                                    'attendance_status'
-                                ]
-                            );
-
-                            ?>"
-                        >
-
-                            <?php
-
-                            echo $workshop[
-                                'attendance_status'
-                            ];
-
-                            ?>
-
-                        </span>
-
-
-                    </td>
-
-
-                    <td>
-
-
-                        <button
-                            class="edit-button"
-
-                            onclick="openWorkshopModal(
-                                '<?php
-                                echo $workshop[
-                                    'workshop_id'
-                                ];
-                                ?>',
-
-                                '<?php
-                                echo htmlspecialchars(
-                                    $workshop['name'],
-                                    ENT_QUOTES
-                                );
-                                ?>',
-
-                                '<?php
-                                echo htmlspecialchars(
-                                    $workshop[
-                                        'workshop_name'
-                                    ],
-                                    ENT_QUOTES
-                                );
-                                ?>',
-
-                                '<?php
-                                echo $workshop[
-                                    'attendance_date'
-                                ];
-                                ?>',
-
-                                '<?php
-                                echo $workshop[
-                                    'attendance_status'
-                                ];
-                                ?>',
-
-                                '<?php
-                                echo htmlspecialchars(
-                                    $workshop['remarks'],
-                                    ENT_QUOTES
-                                );
-                                ?>',
-
-                                '<?php
-                                echo $selected_workshop_year;
-                                ?>'
-                            )"
-                        >
-
-                            Edit
-
-                        </button>
-
-
-                    </td>
-
-
-                </tr>
-
-
-                <?php
-
-                    }
-
-                } else {
-
-                    echo "
-
-                    <tr>
-
-                        <td
-                            colspan='8'
-                            class='no-data'
-                        >
-
-                            No workshop records found.
-
-                        </td>
-
-                    </tr>
-
-                    ";
-
-                }
-
-                ?>
-
-
-                </tbody>
-
-
-            </table>
-
-
-        </div>
-
-
-    </section>
-
-    <section
-        id="reports"
-        class="content-section"
-    >
-
-
-        <div class="section-header">
-
-
-            <div>
-
-                <h2>
-                    Two-Year Compliance Report
-                </h2>
-
-                <p>
-
-                    Every employee must attend
-                    at least one workshop in
-                    a two-year period.
-
-                </p>
-
-            </div>
-
-
-        </div>
-
-        <form
-            method="GET"
-            action="#reports"
-            class="report-form"
+        <button
+            class="add-btn"
+            onclick="openAddModal()"
         >
+            + Add New Employee
+        </button>
 
+    </div>
 
-            <div>
+    <div class="table-container">
 
-                <label>
-                    From Year
-                </label>
+        <table>
 
-
-                <select
-                    name="from_year"
-                    required
-                >
-
-                    <option value="">
-                        Select year
-                    </option>
-
-
-                    <?php
-
-                    for (
-                        $year = 2020;
-                        $year <= date("Y");
-                        $year++
-                    ) {
-
-                        $selected = "";
-
-                        if (
-                            $from_year == $year
-                        ) {
-
-                            $selected =
-                                "selected";
-
-                        }
-
-
-                        echo "
-
-                        <option
-                            value='$year'
-                            $selected
-                        >
-
-                            $year
-
-                        </option>
-
-                        ";
-
-                    }
-
-                    ?>
-
-                </select>
-
-            </div>
-
-
-
-            <div>
-
-                <label>
-                    To Year
-                </label>
-
-
-                <select
-                    name="to_year"
-                    required
-                >
-
-                    <option value="">
-                        Select year
-                    </option>
-
-
-                    <?php
-
-                    for (
-                        $year = 2020;
-                        $year <= date("Y");
-                        $year++
-                    ) {
-
-                        $selected = "";
-
-                        if (
-                            $to_year == $year
-                        ) {
-
-                            $selected =
-                                "selected";
-
-                        }
-
-
-                        echo "
-
-                        <option
-                            value='$year'
-                            $selected
-                        >
-
-                            $year
-
-                        </option>
-
-                        ";
-
-                    }
-
-                    ?>
-
-                </select>
-
-            </div>
-
-            <button
-                type="submit"
-                class="primary-button"
-                name="show_report"
-            >
-
-                Generate Report
-
-            </button>
-
-        </form>
-
-        <div class="report-note">
-
-            Select exactly two consecutive years.
-
-            Example:
-            <strong>
-                2024 - 2025
-            </strong>
-
-        </div>
-
-        <?php
-
-        if ($report_error != "") {
-
-            echo "
-
-            <div class='error-message'>
-
-                $report_error
-
-            </div>
-
-            ";
-
-        }
-
-
-        if ($show_report) {
-
-        ?>
-
-        <div class="report-header">
-
-
-            <div>
-
-                <h3>
-
-                    Report:
-
-                    <?php
-                    echo $from_year;
-                    ?>
-
-                    -
-
-                    <?php
-                    echo $to_year;
-                    ?>
-
-                </h3>
-
-
-                <p>
-
-                    Minimum requirement:
-                    1 attended workshop
-
-                </p>
-
-            </div>
-
-
-        </div>
-
-        <div class="report-summary">
-
-
-            <div>
-
-                <strong>
-                    <?php
-                    echo count($report_rows);
-                    ?>
-                </strong>
-
-                <span>
-                    Total Employees
-                </span>
-
-            </div>
-
-            <div class="satisfied-box">
-
-                <strong>
-                    <?php
-                    echo $satisfied;
-                    ?>
-                </strong>
-
-                <span>
-                    Requirement Satisfied
-                </span>
-
-            </div>
-
-            <div class="not-satisfied-box">
-
-                <strong>
-                    <?php
-                    echo $not_satisfied;
-                    ?>
-                </strong>
-
-                <span>
-                    Requirement Not Satisfied
-                </span>
-
-            </div>
-
-        </div>
-
-        <div class="table-container">
-
-            <table>
-
-                <thead>
+            <thead>
 
                 <tr>
 
-                    <th>
-                        IC Number
-                    </th>
+                    <th>ICNO</th>
 
-                    <th>
-                        Name
-                    </th>
+                    <th>Name</th>
 
-                    <th>
-                        Designation
-                    </th>
+                    <th>Designation</th>
 
-                    <th>
-                        Workshops Attended
-                    </th>
+                    <th>Group</th>
 
-                    <th>
-                        Total Records
-                    </th>
-
-                    <th>
-                        Requirement
-                    </th>
+                    <th>Action</th>
 
                 </tr>
 
-                </thead>
+            </thead>
 
-                <tbody>
+            <tbody>
 
-                <?php
+            <?php if (mysqli_num_rows($result) > 0): ?>
 
-                foreach (
-                    $report_rows
-                    as $row
-                ) {
-
-                ?>
-
-                <tr>
-
-                    <td>
-
-                        <?php
-                        echo $row['ic_number'];
-                        ?>
-
-                    </td>
-
-                    <td>
-
-                        <?php
-
-                        echo htmlspecialchars(
-                            $row['name']
-                        );
-
-                        ?>
-
-                    </td>
-
-                    <td>
-
-                        <?php
-
-                        echo htmlspecialchars(
-                            $row['designation']
-                        );
-
-                        ?>
-
-                    </td>
-
-                    <td>
-
-                        <?php
-                        echo $row['attended_count'];
-                        ?>
-
-                    </td>
-
-                    <td>
-
-                        <?php
-                        echo $row['total_records'];
-                        ?>
-
-                    </td>
-
-                    <td>
-
-                        <?php
-
-                        if (
-                            $row['attended_count']
-                            >= 1
-                        ) {
-
-                            echo "
-
-                            <span
-                                class='report-satisfied'
-                            >
-
-                                Satisfied
-
-                            </span>
-
-                            ";
-
-                        } else {
-
-                            echo "
-
-                            <span
-                                class='report-not-satisfied'
-                            >
-
-                                Not Satisfied
-
-                            </span>
-
-                            ";
-
-                        }
-
-                        ?>
-
-                    </td>
-
-                </tr>
-
-                <?php
-
-                }
-
-                ?>
-
-                </tbody>
-
-            </table>
-
-        </div>
-
-        <h3 class="detail-heading">
-
-            Detailed Workshop Records
-
-        </h3>
-
-        <?php
-
-        foreach (
-            $report_rows
-            as $employee
-        ) {
-
-            $employee_ic =
-                $employee['ic_number'];
-
-            $details = mysqli_query(
-
-                $db_connection,
-
-                "SELECT *
-
-                 FROM workshops
-
-                 WHERE employee_ic =
-                       '$employee_ic'
-
-                 AND workshop_year
-                     BETWEEN '$from_year'
-                     AND '$to_year'
-
-                 ORDER BY
-                     workshop_year ASC,
-                     attendance_date ASC"
-
-            );
-
-        ?>
-
-        <div class="employee-report-card">
-
-            <div class="employee-report-header">
-
-                <div>
-
-                    <strong>
-
-                        <?php
-
-                        echo htmlspecialchars(
-                            $employee['name']
-                        );
-
-                        ?>
-
-                    </strong>
-
-                    <span>
-
-                        IC:
-
-                        <?php
-
-                        echo $employee[
-                            'ic_number'
-                        ];
-
-                        ?>
-
-                    </span>
-
-                    <span>
-
-                        <?php
-
-                        echo htmlspecialchars(
-                            $employee[
-                                'designation'
-                            ]
-                        );
-
-                        ?>
-
-                    </span>
-
-                </div>
-
-                <div>
-
-                    <?php
-
-                    if (
-                        $employee[
-                            'attended_count'
-                        ] >= 1
-                    ) {
-
-                        echo "
-
-                        <span
-                            class='report-satisfied'
-                        >
-
-                            Satisfied
-
-                        </span>
-
-                        ";
-
-                    } else {
-
-                        echo "
-
-                        <span
-                            class='report-not-satisfied'
-                        >
-
-                            Not Satisfied
-
-                        </span>
-
-                        ";
-
-                    }
-
-                    ?>
-
-
-                </div>
-
-            </div>
-
-            <table>
-
-                <thead>
-
-                <tr>
-
-                    <th>
-                        Workshop
-                    </th>
-
-                    <th>
-                        Year
-                    </th>
-
-                    <th>
-                        Date
-                    </th>
-
-                    <th>
-                        Status
-                    </th>
-
-                    <th>
-                        Remarks
-                    </th>
-
-                    <th>
-                        Action
-                    </th>
-
-                </tr>
-
-                </thead>
-
-                <tbody>
-
-                <?php
-
-                if (
-                    mysqli_num_rows($details)
-                    > 0
-                ) {
-
-                    while (
-                        $detail =
-                        mysqli_fetch_assoc(
-                            $details
-                        )
-                    ) {
-
-                ?>
-
-                <tr>
-
-                    <td>
-
-                        <?php
-
-                        echo htmlspecialchars(
-                            $detail[
-                                'workshop_name'
-                            ]
-                        );
-
-                        ?>
-
-                    </td>
-
-                    <td>
-
-                        <?php
-
-                        echo $detail[
-                            'workshop_year'
-                        ];
-
-                        ?>
-
-                    </td>
-
-                    <td>
-
-                        <?php
-
-                        echo $detail[
-                            'attendance_date'
-                        ];
-
-                        ?>
-
-                    </td>
-
-                    <td>
-
-                        <span
-                            class="status
-                            <?php
-
-                            echo strtolower(
-                                $detail[
-                                    'attendance_status'
-                                ]
-                            );
-
-                            ?>"
-                        >
-
-                            <?php
-
-                            echo $detail[
-                                'attendance_status'
-                            ];
-
-                            ?>
-
-                        </span>
-
-                    </td>
-
-                    <td>
-
-                        <?php
-
-                        echo htmlspecialchars(
-                            $detail['remarks']
-                        );
-
-                        ?>
-
-                    </td>
-
-                    <td>
-
-                        <button
-                            class="edit-button"
-
-                            onclick="openWorkshopModal(
-                                '<?php
-                                echo $detail[
-                                    'workshop_id'
-                                ];
-                                ?>',
-
-                                '<?php
-                                echo htmlspecialchars(
-                                    $employee['name'],
-                                    ENT_QUOTES
-                                );
-                                ?>',
-
-                                '<?php
-                                echo htmlspecialchars(
-                                    $detail[
-                                        'workshop_name'
-                                    ],
-                                    ENT_QUOTES
-                                );
-                                ?>',
-
-                                '<?php
-                                echo $detail[
-                                    'attendance_date'
-                                ];
-                                ?>',
-
-                                '<?php
-                                echo $detail[
-                                    'attendance_status'
-                                ];
-                                ?>',
-
-                                '<?php
-                                echo htmlspecialchars(
-                                    $detail[
-                                        'remarks'
-                                    ],
-                                    ENT_QUOTES
-                                );
-                                ?>',
-
-                                '<?php
-                                echo $from_year;
-                                ?>',
-
-                                '<?php
-                                echo $to_year;
-                                ?>'
-                            )"
-                        >
-
-                            Edit
-
-                        </button>
-
-                    </td>
-
-                </tr>
-
-                <?php
-
-                    }
-
-                } else {
-
-                    echo "
+                <?php while ($employee = mysqli_fetch_assoc($result)): ?>
 
                     <tr>
 
-                        <td
-                            colspan='6'
-                            class='no-data'
-                        >
+                        <td>
+                            <?php echo htmlspecialchars($employee["ICNO"]); ?>
+                        </td>
 
-                            No workshop records
-                            found during this
-                            two-year period.
+                        <td>
+                            <?php echo htmlspecialchars($employee["ENAME"]); ?>
+                        </td>
+
+                        <td>
+                            <?php echo htmlspecialchars($employee["EDESIG"]); ?>
+                        </td>
+
+                        <td>
+                            <?php echo htmlspecialchars($employee["EGROUP"]); ?>
+                        </td>
+
+                        <td>
+
+                            <button
+                                class="view-btn"
+                                onclick='viewEmployee(
+                                    <?php echo json_encode($employee); ?>
+                                )'
+                            >
+                                View
+                            </button>
+
+
+                            <button
+                                class="edit-btn"
+                                onclick='editEmployee(
+                                    <?php echo json_encode($employee); ?>
+                                )'
+                            >
+                                Edit
+                            </button>
+
+
+                            <button
+                                class="delete-btn"
+                                onclick="deleteEmployee(
+                                    <?php echo $employee['ICNO']; ?>,
+                                    '<?php echo htmlspecialchars($employee['ENAME'], ENT_QUOTES); ?>'
+                                )"
+                            >
+                                Delete
+                            </button>
 
                         </td>
 
                     </tr>
 
-                    ";
+                <?php endwhile; ?>
 
-                }
+            <?php else: ?>
 
-                ?>
+                <tr>
 
-                </tbody>
+                    <td colspan="5" style="text-align:center;">
+                        No employees found.
+                    </td>
 
-            </table>
+                </tr>
 
-        </div>
+            <?php endif; ?>
 
-        <?php
+            </tbody>
 
-        }
+        </table>
 
-        ?>
-
-        <?php
-
-        }
-
-        ?>
-
-    </section>
+    </div>
 
 </div>
 
 <div
-    id="addEmployeeModal"
+    id="addModal"
     class="modal"
 >
 
-    <div class="modal-box">
+    <div class="modal-content">
 
         <span
             class="close"
-            onclick="closeAddModal()"
+            onclick="closeModal('addModal')"
         >
-
             &times;
-
         </span>
 
         <h2>
-            Add Employee
+            Add New Employee
         </h2>
 
-        <form method="POST">
+        <form
+            method="POST"
+            onsubmit="return validateAddForm()"
+        >
 
-            <label>
-                IC Number
-            </label>
+            <div class="form-group">
 
-            <input
-                type="number"
-                name="ic_number"
-                required
-            >
+                <label>
+                    Employee Name
+                </label>
 
-            <label>
-                Name
-            </label>
+                <input
+                    type="text"
+                    name="ename"
+                    id="add_ename"
+                    maxlength="100"
+                    required
+                >
 
-            <input
-                type="text"
-                name="name"
-                required
-            >
+            </div>
 
-            <label>
-                Phone
-            </label>
+            <div class="form-group">
 
-            <input
-                type="text"
-                name="phone"
-                required
-            >
+                <label>
+                    Designation
+                </label>
 
-            <label>
-                Designation
-            </label>
+                <select
+                    name="edesig"
+                    id="add_edesig"
+                    required
+                >
 
+                    <option value="">
+                        Select Designation
+                    </option>
 
-            <select
-                name="designation"
-                required
-            >
+                    <?php foreach ($designations as $designation): ?>
 
-                <option value="">
-                    Select Designation
-                </option>
+                        <option value="<?php echo htmlspecialchars($designation); ?>">
 
-                <option>
-                    Scientist-B
-                </option>
+                            <?php echo htmlspecialchars($designation); ?>
 
-                <option>
-                    Scientist-C
-                </option>
+                        </option>
 
-                <option>
-                    Scientist-D
-                </option>
+                    <?php endforeach; ?>
 
-                <option>
-                    Scientist-E
-                </option>
+                </select>
 
-                <option>
-                    Scientist-F
-                </option>
+            </div>
 
-                <option>
-                    TO-A
-                </option>
+            <div class="form-group">
 
-                <option>
-                    TO-B
-                </option>
+                <label>
+                    Group
+                </label>
 
-                <option>
-                    TO-C
-                </option>
+                <input
+                    type="text"
+                    name="egroup"
+                    id="add_egroup"
+                    maxlength="100"
+                    required
+                >
 
-                <option>
-                    TO-D
-                </option>
+            </div>
 
-                <option>
-                    Director
-                </option>
+            <div class="form-group">
 
-                <option>
-                    HRD
-                </option>
+                <label>
+                    Password
+                </label>
 
-                <option>
-                    Other
-                </option>
+                <input
+                    type="password"
+                    name="password"
+                    id="add_password"
+                    maxlength="100"
+                    required
+                >
 
-            </select>
-
-            <label>
-                Email
-            </label>
-
-            <input
-                type="email"
-                name="email"
-                required
-            >
-
-            <label>
-                Login Role
-            </label>
-
-            <select
-                name="role"
-                required
-            >
-
-                <option value="Employee">
-                    Employee
-                </option>
-
-                <option value="Karyashala Admin">
-                    Karyashala Admin
-                </option>
-
-            </select>
-
-            <label>
-                Login Password
-            </label>
-
-            <input
-                type="text"
-                name="password"
-                required
-            >
+            </div>
 
             <button
                 type="submit"
                 name="add_employee"
-                class="primary-button"
+                class="save-btn"
             >
-
                 Add Employee
-
             </button>
 
         </form>
@@ -2215,139 +525,117 @@ if (isset($_GET['show_report'])) {
 </div>
 
 <div
-    id="editEmployeeModal"
+    id="editModal"
     class="modal"
 >
 
-    <div class="modal-box">
+    <div class="modal-content">
 
         <span
             class="close"
-            onclick="closeEditEmployeeModal()"
+            onclick="closeModal('editModal')"
         >
-
             &times;
-
         </span>
 
+
         <h2>
-            Update Employee
+            Edit Employee
         </h2>
 
-        <form method="POST">
-
-            <label>
-                IC Number
-            </label>
-
-            <input
-                type="text"
-                id="edit_ic"
-                name="ic_number"
-                readonly
-            >
-
-            <label>
-                Name
-            </label>
+        <form
+            method="POST"
+            onsubmit="return validateEditForm()"
+        >
 
             <input
-                type="text"
-                id="edit_name"
-                name="name"
-                required
+                type="hidden"
+                name="icno"
+                id="edit_icno"
             >
 
-            <label>
-                Phone
-            </label>
+            <div class="form-group">
 
-            <input
-                type="text"
-                id="edit_phone"
-                name="phone"
-                required
-            >
+                <label>
+                    ICNO
+                </label>
 
-            <label>
-                Designation
-            </label>
+                <input
+                    type="number"
+                    id="edit_icno_display"
+                    readonly
+                >
 
-            <select
-                id="edit_designation"
-                name="designation"
-                required
-            >
+            </div>
 
-                <option>
-                    Scientist-B
-                </option>
+            <div class="form-group">
 
-                <option>
-                    Scientist-C
-                </option>
+                <label>
+                    Employee Name
+                </label>
 
-                <option>
-                    Scientist-D
-                </option>
+                <input
+                    type="text"
+                    name="ename"
+                    id="edit_ename"
+                    maxlength="100"
+                    required
+                >
 
-                <option>
-                    Scientist-E
-                </option>
+            </div>
 
-                <option>
-                    Scientist-F
-                </option>
+            <div class="form-group">
 
-                <option>
-                    TO-A
-                </option>
+                <label>
+                    Designation
+                </label>
 
-                <option>
-                    TO-B
-                </option>
+                <select
+                    name="edesig"
+                    id="edit_edesig"
+                    required
+                >
 
-                <option>
-                    TO-C
-                </option>
+                    <option value="">
+                        Select Designation
+                    </option>
 
-                <option>
-                    TO-D
-                </option>
+                    <?php foreach ($designations as $designation): ?>
 
-                <option>
-                    Director
-                </option>
+                        <option value="<?php echo htmlspecialchars($designation); ?>">
 
-                <option>
-                    HRD
-                </option>
+                            <?php echo htmlspecialchars($designation); ?>
 
-                <option>
-                    Other
-                </option>
+                        </option>
 
-            </select>
+                    <?php endforeach; ?>
 
-            <label>
-                Email
-            </label>
+                </select>
 
-            <input
-                type="email"
-                id="edit_email"
-                name="email"
-                required
-            >
+            </div>
+
+            <div class="form-group">
+
+                <label>
+                    Group
+                </label>
+
+                <input
+                    type="text"
+                    name="egroup"
+                    id="edit_egroup"
+                    maxlength="100"
+                    required
+                >
+
+            </div>
 
             <button
                 type="submit"
-                name="update_employee"
-                class="primary-button"
+                name="edit_employee"
+                class="save-btn"
             >
-
                 Save Changes
-
             </button>
 
         </form>
@@ -2357,283 +645,291 @@ if (isset($_GET['show_report'])) {
 </div>
 
 <div
-    id="workshopModal"
+    id="viewModal"
     class="modal"
 >
 
-    <div class="modal-box">
-
+    <div class="modal-content">
 
         <span
             class="close"
-            onclick="closeWorkshopModal()"
+            onclick="closeModal('viewModal')"
         >
-
             &times;
-
         </span>
 
         <h2>
-            Update Workshop Attendance
+            Employee Details
         </h2>
 
-        <p
-            id="workshop_employee"
-            class="modal-info"
-        ></p>
+        <div class="view-field">
 
-        <form method="POST">
+            <strong>ICNO</strong>
 
-            <input
-                type="hidden"
-                id="workshop_id"
-                name="workshop_id"
-            >
+            <span id="view_icno"></span>
 
-            <input
-                type="hidden"
-                id="report_from_year"
-                name="report_from_year"
-            >
+        </div>
 
-            <input
-                type="hidden"
-                id="report_to_year"
-                name="report_to_year"
-            >
+        <div class="view-field">
 
-            <label>
-                Workshop
-            </label>
+            <strong>Employee Name</strong>
 
-            <input
-                type="text"
-                id="workshop_name"
-                readonly
-            >
+            <span id="view_ename"></span>
 
-            <label>
-                Attendance Date
-            </label>
+        </div>
 
-            <input
-                type="date"
-                id="attendance_date"
-                name="attendance_date"
-                required
-            >
+        <div class="view-field">
 
-            <label>
-                Attendance Status
-            </label>
+            <strong>Designation</strong>
 
-            <select
-                id="attendance_status"
-                name="attendance_status"
-                required
-            >
+            <span id="view_edesig"></span>
 
-                <option value="Pending">
-                    Pending
-                </option>
+        </div>
 
-                <option value="Attended">
-                    Attended
-                </option>
+        <div class="view-field">
 
-                <option value="Absent">
-                    Absent
-                </option>
+            <strong>Group</strong>
 
-            </select>
+            <span id="view_egroup"></span>
 
-            <label>
-                Remarks
-            </label>
-
-            <textarea
-                id="remarks"
-                name="remarks"
-                rows="4"
-            ></textarea>
-
-            <button
-                type="submit"
-                name="update_workshop"
-                class="primary-button"
-            >
-
-                Save Attendance
-
-            </button>
-
-        </form>
+        </div>
 
     </div>
 
 </div>
+
+<form
+    id="deleteForm"
+    method="POST"
+    style="display:none;"
+>
+
+    <input
+        type="hidden"
+        name="delete_icno"
+        id="delete_icno"
+    >
+
+    <input
+        type="hidden"
+        name="delete_employee"
+        value="1"
+    >
+
+</form>
 
 <script>
 
 function openAddModal() {
 
-    document.getElementById(
-        "addEmployeeModal"
-    ).style.display = "flex";
+    document.getElementById("addModal").style.display = "flex";
 
 }
 
-function closeAddModal() {
+function viewEmployee(employee) {
 
-    document.getElementById(
-        "addEmployeeModal"
-    ).style.display = "none";
+    document.getElementById("view_icno").textContent =
+        employee.ICNO;
 
-}
+    document.getElementById("view_ename").textContent =
+        employee.ENAME;
 
-function openEditEmployeeModal(
-    ic,
-    name,
-    phone,
-    designation,
-    email
-) {
+    document.getElementById("view_edesig").textContent =
+        employee.EDESIG;
 
-    document.getElementById(
-        "edit_ic"
-    ).value = ic;
+    document.getElementById("view_egroup").textContent =
+        employee.EGROUP;
 
-
-    document.getElementById(
-        "edit_name"
-    ).value = name;
-
-
-    document.getElementById(
-        "edit_phone"
-    ).value = phone;
-
-
-    document.getElementById(
-        "edit_designation"
-    ).value = designation;
-
-
-    document.getElementById(
-        "edit_email"
-    ).value = email;
-
-
-    document.getElementById(
-        "editEmployeeModal"
-    ).style.display = "flex";
+    document.getElementById("viewModal").style.display = "flex";
 
 }
 
-function closeEditEmployeeModal() {
+function editEmployee(employee) {
 
-    document.getElementById(
-        "editEmployeeModal"
-    ).style.display = "none";
+    document.getElementById("edit_icno").value =
+        employee.ICNO;
 
-}
+    document.getElementById("edit_icno_display").value =
+        employee.ICNO;
 
-function openWorkshopModal(
-    id,
-    employee,
-    workshop,
-    date,
-    status,
-    remarks,
-    fromYear,
-    toYear
-) {
+    document.getElementById("edit_ename").value =
+        employee.ENAME;
 
+    document.getElementById("edit_edesig").value =
+        employee.EDESIG;
 
-    document.getElementById(
-        "workshop_id"
-    ).value = id;
+    document.getElementById("edit_egroup").value =
+        employee.EGROUP;
 
-
-    document.getElementById(
-        "workshop_employee"
-    ).innerHTML =
-
-        "Employee: <strong>" +
-        employee +
-        "</strong>";
-
-
-    document.getElementById(
-        "workshop_name"
-    ).value = workshop;
-
-
-    document.getElementById(
-        "attendance_date"
-    ).value = date;
-
-
-    document.getElementById(
-        "attendance_status"
-    ).value = status;
-
-
-    document.getElementById(
-        "remarks"
-    ).value = remarks;
-
-
-    document.getElementById(
-        "report_from_year"
-    ).value = fromYear || "";
-
-
-    document.getElementById(
-        "report_to_year"
-    ).value = toYear || "";
-
-
-    document.getElementById(
-        "workshopModal"
-    ).style.display = "flex";
+    document.getElementById("editModal").style.display =
+        "flex";
 
 }
 
-function closeWorkshopModal() {
+function deleteEmployee(icno, name) {
 
-    document.getElementById(
-        "workshopModal"
-    ).style.display = "none";
+    let firstConfirm = confirm(
+        "Are you sure you want to delete employee " +
+        name +
+        " (ICNO: " +
+        icno +
+        ")?"
+    );
+
+    if (!firstConfirm) {
+
+        return;
+
+    }
+
+    let confirmation = prompt(
+        "This action cannot be undone.\n\n" +
+        "Type DELETE to confirm deletion:"
+    );
+
+    if (confirmation !== "DELETE") {
+
+        alert("Deletion cancelled.");
+
+        return;
+
+    }
+
+    document.getElementById("delete_icno").value =
+        icno;
+
+    document.getElementById("deleteForm").submit();
+
+}
+
+function closeModal(modalId) {
+
+    document.getElementById(modalId).style.display =
+        "none";
 
 }
 
 window.onclick = function(event) {
 
+    let addModal = document.getElementById("addModal");
 
-    if (
-        event.target.classList.contains(
-            "modal"
-        )
-    ) {
+    let editModal = document.getElementById("editModal");
 
-        event.target.style.display =
-            "none";
+    let viewModal = document.getElementById("viewModal");
+
+
+    if (event.target === addModal) {
+
+        addModal.style.display = "none";
 
     }
 
-};
+    if (event.target === editModal) {
+
+        editModal.style.display = "none";
+
+    }
+
+    if (event.target === viewModal) {
+
+        viewModal.style.display = "none";
+
+    }
+
+}
+
+function validateAddForm() {
+
+    let name =
+        document.getElementById("add_ename").value.trim();
+
+    let designation =
+        document.getElementById("add_edesig").value;
+
+    let group =
+        document.getElementById("add_egroup").value.trim();
+
+    let password =
+        document.getElementById("add_password").value;
+
+
+    if (name === "") {
+
+        alert("Please enter employee name.");
+
+        return false;
+
+    }
+
+    if (designation === "") {
+
+        alert("Please select a designation.");
+
+        return false;
+
+    }
+
+    if (group === "") {
+
+        alert("Please enter employee group.");
+
+        return false;
+
+    }
+
+    if (password === "") {
+
+        alert("Please enter password.");
+
+        return false;
+
+    }
+
+    return true;
+
+}
+
+function validateEditForm() {
+
+    let name =
+        document.getElementById("edit_ename").value.trim();
+
+    let designation =
+        document.getElementById("edit_edesig").value;
+
+    let group =
+        document.getElementById("edit_egroup").value.trim();
+
+    if (name === "") {
+
+        alert("Please enter employee name.");
+
+        return false;
+
+    }
+
+    if (designation === "") {
+
+        alert("Please select a designation.");
+
+        return false;
+
+    }
+
+    if (group === "") {
+
+        alert("Please enter employee group.");
+
+        return false;
+
+    }
+
+    return true;
+
+}
 
 </script>
 
 </body>
 
 </html>
-
-<?php
-
-mysqli_close(
-    $db_connection
-);
-
-?>
