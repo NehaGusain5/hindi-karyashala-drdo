@@ -16,23 +16,37 @@ CREATE TABLE employees (
 ALTER TABLE employees AUTO_INCREMENT = 1001;
 
 CREATE TABLE roles (
+    ICNO INT NOT NULL PRIMARY KEY,
+    ENAME VARCHAR(200) NOT NULL,
+    ROLE ENUM('admin', 'karyashala_admin') NOT NULL,
 
-    ICNO INT NOT NULL,
-    ENAME VARCHAR(100) NOT NULL,
-    ROLE VARCHAR(100) NOT NULL,
-    FOREIGN KEY (ICNO) REFERENCES employees(ICNO)
-
+    FOREIGN KEY (ICNO)
+        REFERENCES employees(ICNO)
+        ON DELETE CASCADE
 );
 
-CREATE TABLE karyashalamgt (
+-- CREATE TABLE karyashalamgt (
 
+--     ICNO INT NOT NULL,
+--     ENAME VARCHAR(100) NOT NULL,
+--     karyashala_date DATE NOT NULL,
+--     karyashala_remark VARCHAR(255),
+
+--     FOREIGN KEY (ICNO) REFERENCES employees(ICNO)
+
+-- );
+
+-- ALTER TABLE karyashalamgt
+-- ADD COLUMN id INT AUTO_INCREMENT PRIMARY KEY FIRST;
+
+CREATE TABLE karyashalamgt (
+    id INT AUTO_INCREMENT PRIMARY KEY,
     ICNO INT NOT NULL,
     ENAME VARCHAR(100) NOT NULL,
     karyashala_date DATE NOT NULL,
     karyashala_remark VARCHAR(255),
 
     FOREIGN KEY (ICNO) REFERENCES employees(ICNO)
-
 );
 
 INSERT INTO employees (ENAME, EDESIG, EGROUP, PASSWORD)
@@ -44,5 +58,4 @@ INSERT INTO roles (ICNO, ENAME, ROLE)
 VALUES
 (1001, 'Admin', 'admin'),
 (1002, 'Karyashala Admin', 'karyashala_admin');
-
 

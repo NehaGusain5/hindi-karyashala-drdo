@@ -292,9 +292,11 @@ $result = mysqli_query($conn, $sql);
 
     <div class="action-bar">
 
-        <h2>
-            Employee Management
-        </h2>
+    <h2>
+        Employee Management
+    </h2>
+
+    <div>
 
         <button
             class="add-btn"
@@ -303,7 +305,33 @@ $result = mysqli_query($conn, $sql);
             + Add New Employee
         </button>
 
+        <a
+            href="karyashala_report.php"
+            class="add-btn"
+            style="text-decoration:none; display:inline-block;"
+        >
+            Karyashala Management
+        </a>
+
+        <a
+            href="generate_report.php"
+            class="add-btn"
+            style="text-decoration:none; display:inline-block;"
+        >
+            Generate Report
+        </a>
+
+        <a
+            href="role_management.php"
+            class="add-btn"
+            style="text-decoration:none; display:inline-block;"
+        >
+            Role Management
+        </a>
+
     </div>
+
+</div>
 
     <div class="table-container">
 

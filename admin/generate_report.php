@@ -2,135 +2,393 @@
 
 session_start();
 
-if (!isset($_SESSION['ic_number'])) {
+require_once "../config/db.php";
 
+if (!isset($_SESSION["ICNO"]) || !isset($_SESSION["ROLE"])) {
     header("Location: ../login.php");
     exit();
-
 }
 
-if ($_SESSION['role'] != "Admin") {
-
+if ($_SESSION["ROLE"] !== "admin") {
     header("Location: ../login.php");
     exit();
-
 }
 
-$db_connection = mysqli_connect(
-    "localhost",
-    "root",
-    "",
-    "karyashala"
-);
+$selected_period = $_GET["period"] ?? "2023-2025";
 
+$status = $_GET["status"] ?? "attended";
 
-if (!$db_connection) {
+$period_parts = explode("-", $selected_period);
 
-    die("Database connection failed");
+if (count($period_parts) != 2) {
+    $period_parts = [2023, 2025];
+}
 
+$start_year = intval($period_parts[0]);
+$end_year = intval($period_parts[1]);
+
+$start_date = $start_year . "-01-01";
+$end_date = ($end_year - 1) . "-12-31";
+
+if ($status == "attended") {
+
+    $sql = "
+        SELECT
+            e.ICNO,
+            e.ENAME,
+            'Attended' AS STATUS
+        FROM employees e
+
+        INNER JOIN karyashalamgt k
+            ON e.ICNO = k.ICNO
+
+        WHERE k.karyashala_date
+              BETWEEN ? AND ?
+
+        GROUP BY
+            e.ICNO,
+            e.ENAME
+
+        ORDER BY e.ICNO ASC
+    ";
+
+} else {
+
+    $sql = "
+        SELECT
+            e.ICNO,
+            e.ENAME,
+            'Not Attended' AS STATUS
+        FROM employees e
+
+        WHERE NOT EXISTS (
+
+            SELECT 1
+
+            FROM karyashalamgt k
+
+            WHERE k.ICNO = e.ICNO
+
+            AND k.karyashala_date
+                BETWEEN ? AND ?
+
+        )
+
+        ORDER BY e.ICNO ASC
+    ";
 }
 
 
-$from_year = $_GET['from_year'];
+$stmt = mysqli_prepare($conn, $sql);
 
-$to_year = $_GET['to_year'];
-
-
-$query = "
-
-SELECT
-
-    employees.ic_number,
-
-    employees.name,
-
-    employees.designation,
-
-    workshops.workshop_name,
-
-    workshops.workshop_year,
-
-    workshops.attendance_date,
-
-    workshops.attendance_status,
-
-    workshops.remarks
-
-FROM employees
-
-LEFT JOIN workshops
-
-ON employees.ic_number =
-   workshops.employee_ic
-
-WHERE workshops.workshop_year
-BETWEEN '$from_year'
-AND '$to_year'
-
-ORDER BY
-
-    employees.ic_number,
-
-    workshops.workshop_year,
-
-    workshops.attendance_date
-
-";
-
-
-$result = mysqli_query(
-    $db_connection,
-    $query
+mysqli_stmt_bind_param(
+    $stmt,
+    "ss",
+    $start_date,
+    $end_date
 );
+
+mysqli_stmt_execute($stmt);
+
+$result = mysqli_stmt_get_result($stmt);
 
 ?>
 
 <!DOCTYPE html>
-
-<html>
+<html lang="en">
 
 <head>
 
     <meta charset="UTF-8">
 
-    <title>
-        Employee Workshop Report
-    </title>
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Generate Karyashala Report</title>
 
     <link
         rel="stylesheet"
         href="../css/admin.css"
     >
 
+    <style>
+
+        .page-container {
+            width: 95%;
+            max-width: 1200px;
+            margin: 30px auto;
+        }
+
+        .report-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .control-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .control-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .control-group select {
+            padding: 10px;
+            border: 1px solid #aaa;
+            border-radius: 5px;
+        }
+
+        .report-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #0066a1;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .status-attended {
+            color: #198754;
+            font-weight: bold;
+        }
+
+        .status-not-attended {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .back-button {
+            display: inline-block;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: #555;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+
+        .report-heading {
+            color: #003b6f;
+            margin-bottom: 15px;
+        }
+
+    </style>
+
 </head>
 
 <body>
 
-<div class="main-content">
 
-    <div class="content-section">
+<div class="header">
 
-        <h1>
-            Employee Workshop Report
-        </h1>
+    <div class="header-left">
 
-        <p>
+        <img
+            src="../images/drdo-logo.jpg"
+            class="header-logo"
+            alt="DRDO Logo"
+        >
 
-            Period:
-            <strong>
-                <?php echo $from_year; ?>
-            </strong>
+        <div class="header-title">
 
-            to
+            <h1>
+                DRDO Hindi Karyashala Management
+            </h1>
 
-            <strong>
-                <?php echo $to_year; ?>
-            </strong>
+            <p>
+                Defence Research and Development Organisation
+            </p>
 
-        </p>
+        </div>
+
+    </div>
+
+    <a
+        href="../logout.php"
+        class="logout-btn"
+    >
+        Logout
+    </a>
+
+</div>
 
 
-        <br>
+<div class="page-container">
+
+    <a
+        href="dashboard.php"
+        class="back-button"
+    >
+        ← Back to Dashboard
+    </a>
+
+
+    <div class="report-controls">
+
+        <h2 class="report-heading">
+            Generate Karyashala Report
+        </h2>
+
+
+        <form method="GET">
+
+            <div class="control-row">
+
+
+                <!-- PERIOD -->
+
+                <div class="control-group">
+
+                    <label>
+                        Reporting Period
+                    </label>
+
+                    <select
+                        name="period"
+                        onchange="this.form.submit()"
+                    >
+
+                        <option
+                            value="2023-2025"
+                            <?php
+                            if ($selected_period == "2023-2025")
+                                echo "selected";
+                            ?>
+                        >
+                            2023-2025
+                        </option>
+
+                        <option
+                            value="2024-2026"
+                            <?php
+                            if ($selected_period == "2024-2026")
+                                echo "selected";
+                            ?>
+                        >
+                            2024-2026
+                        </option>
+
+                        <option
+                            value="2025-2027"
+                            <?php
+                            if ($selected_period == "2025-2027")
+                                echo "selected";
+                            ?>
+                        >
+                            2025-2027
+                        </option>
+
+                        <option
+                            value="2026-2028"
+                            <?php
+                            if ($selected_period == "2026-2028")
+                                echo "selected";
+                            ?>
+                        >
+                            2026-2028
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- STATUS -->
+
+                <div class="control-group">
+
+                    <label>
+                        Attendance Status
+                    </label>
+
+                    <select
+                        name="status"
+                        onchange="this.form.submit()"
+                    >
+
+                        <option
+                            value="attended"
+                            <?php
+                            if ($status == "attended")
+                                echo "selected";
+                            ?>
+                        >
+                            Attended
+                        </option>
+
+                        <option
+                            value="not_attended"
+                            <?php
+                            if ($status == "not_attended")
+                                echo "selected";
+                            ?>
+                        >
+                            Not Attended
+                        </option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+
+            <p style="margin-top:15px;">
+
+                Report period:
+
+                <strong>
+                    <?php echo $start_date; ?>
+                    →
+                    <?php echo $end_date; ?>
+                </strong>
+
+            </p>
+
+        </form>
+
+    </div>
+
+
+    <div class="report-box">
+
+        <?php if ($status == "attended"): ?>
+
+            <h3 class="report-heading">
+                Employees Who Attended
+            </h3>
+
+        <?php else: ?>
+
+            <h3 class="report-heading">
+                Employees Who Did Not Attend
+            </h3>
+
+        <?php endif; ?>
 
 
         <table>
@@ -140,35 +398,15 @@ $result = mysqli_query(
                 <tr>
 
                     <th>
-                        IC Number
+                        ICNO
                     </th>
 
                     <th>
-                        Name
+                        Employee Name
                     </th>
 
                     <th>
-                        Designation
-                    </th>
-
-                    <th>
-                        Workshop / Event
-                    </th>
-
-                    <th>
-                        Year
-                    </th>
-
-                    <th>
-                        Date
-                    </th>
-
-                    <th>
-                        Attendance
-                    </th>
-
-                    <th>
-                        Remarks
+                        Status
                     </th>
 
                 </tr>
@@ -178,72 +416,69 @@ $result = mysqli_query(
 
             <tbody>
 
-            <?php
+            <?php if (mysqli_num_rows($result) > 0): ?>
 
-            while (
-                $row =
-                mysqli_fetch_assoc($result)
-            ) {
+                <?php while ($employee = mysqli_fetch_assoc($result)): ?>
 
-            ?>
+                    <tr>
+
+                        <td>
+                            <?php
+                            echo htmlspecialchars(
+                                $employee["ICNO"]
+                            );
+                            ?>
+                        </td>
+
+                        <td>
+                            <?php
+                            echo htmlspecialchars(
+                                $employee["ENAME"]
+                            );
+                            ?>
+                        </td>
+
+                        <td>
+
+                            <?php if (
+                                $employee["STATUS"]
+                                == "Attended"
+                            ): ?>
+
+                                <span class="status-attended">
+                                    Attended
+                                </span>
+
+                            <?php else: ?>
+
+                                <span class="status-not-attended">
+                                    Not Attended
+                                </span>
+
+                            <?php endif; ?>
+
+                        </td>
+
+                    </tr>
+
+                <?php endwhile; ?>
+
+            <?php else: ?>
 
                 <tr>
 
-                    <td>
-                        <?php
-                        echo $row['ic_number'];
-                        ?>
-                    </td>
+                    <td
+                        colspan="3"
+                        style="text-align:center;"
+                    >
 
-                    <td>
-                        <?php
-                        echo $row['name'];
-                        ?>
-                    </td>
+                        No employees found.
 
-                    <td>
-                        <?php
-                        echo $row['designation'];
-                        ?>
-                    </td>
-
-                    <td>
-                        <?php
-                        echo $row['workshop_name'];
-                        ?>
-                    </td>
-
-                    <td>
-                        <?php
-                        echo $row['workshop_year'];
-                        ?>
-                    </td>
-
-                    <td>
-                        <?php
-                        echo $row['attendance_date'];
-                        ?>
-                    </td>
-
-                    <td>
-                        <?php
-                        echo $row['attendance_status'];
-                        ?>
-                    </td>
-
-                    <td>
-                        <?php
-                        echo $row['remarks'];
-                        ?>
                     </td>
 
                 </tr>
 
-            <?php
-
-            }
-
-            ?>
+            <?php endif; ?>
 
             </tbody>
 
@@ -256,9 +491,3 @@ $result = mysqli_query(
 </body>
 
 </html>
-
-<?php
-
-mysqli_close($db_connection);
-
-?>
