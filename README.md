@@ -312,19 +312,24 @@ Hindi-Karyashala-Management/
 │
 ├── admin/
 │   └── dashboard.php
+|   |__ report_generetation.php
+|   |__ karyashala_report.php
+|   |__ role_management.php
 │
 ├── config/
 │   └── db.php
 │
 ├── css/
 │   └── admin.css
+|   |__ role_management.css
 │
 ├── images/
-│   └── drdo_logo.png
+│   └── drdo-logo.jpg
 │
+├── query
+│   └── db.sql
+|
 ├── login.php
-│
-├── karyashala_dashboard.php
 │
 ├── logout.php
 │
