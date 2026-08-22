@@ -55,7 +55,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                 } elseif ($role_data["ROLE"] == "karyashala_admin") {
 
-                    header("Location: karyashala_dashboard.php");
+                    header("Location: karyashala_admin/dashboard.php");
                     exit();
 
                 } else {

@@ -73,6 +73,57 @@
     background: #004f7c;
 }
 
+.info-box {
+    background: #e8f4fc;
+    border-left: 5px solid #0066a1;
+
+    padding: 15px 20px;
+
+    margin-bottom: 20px;
+
+    border-radius: 6px;
+
+    color: #333;
+}
+
+.info-box strong {
+    color: #003b6f;
+}
+
+.info-box p {
+    margin: 8px 0 0;
+}
+
+.dashboard-actions {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 25px;
+}
+
+.dashboard-actions .add-button {
+    display: inline-block;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.view-only {
+    display: inline-block;
+
+    padding: 7px 10px;
+
+    background: #eeeeee;
+
+    color: #666;
+
+    border-radius: 4px;
+
+    font-size: 13px;
+}
+
 
 /* TABLE */
 
